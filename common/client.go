@@ -30,7 +30,7 @@ type EnqueueResponse struct {
 }
 
 func (c *Client) Enqueue(tasks []Task) (*EnqueueResponse, error) {
-	jsb, err := json.Marshal(tasks)
+	jsb, err := json.Marshal(EnqueueTaskInput{Tasks: tasks})
 	if err != nil {
 		return nil, err
 	}

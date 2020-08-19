@@ -2,6 +2,7 @@
 FROM golang:1.13-stretch as build
 
 ENV GO111MODULE on
+ENV GIN_MODE release
 
 # Create a user to run the app as
 RUN useradd --shell /bin/bash groove
