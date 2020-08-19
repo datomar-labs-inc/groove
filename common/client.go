@@ -8,8 +8,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"time"
-
-	groove "github.com/datomar-labs-inc/groove/common"
 )
 
 type Client struct {
@@ -31,7 +29,7 @@ type EnqueueResponse struct {
 	Status   string `json:"status"`
 }
 
-func (c *Client) Enqueue(tasks []groove.Task) (*EnqueueResponse, error) {
+func (c *Client) Enqueue(tasks []Task) (*EnqueueResponse, error) {
 	jsb, err := json.Marshal(tasks)
 	if err != nil {
 		return nil, err
@@ -70,10 +68,10 @@ func (c *Client) Enqueue(tasks []groove.Task) (*EnqueueResponse, error) {
 
 type DequeueResponse struct {
 	Status  string  `json:"status"`
-	TaskSet groove.TaskSet `json:"task_set"`
+	TaskSet TaskSet `json:"task_set"`
 }
 
-func (c *Client) Dequeue(input groove.DequeueTaskInput) (*DequeueResponse, error) {
+func (c *Client) Dequeue(input DequeueTaskInput) (*DequeueResponse, error) {
 	jsb, err := json.Marshal(input)
 	if err != nil {
 		return nil, err
@@ -114,7 +112,7 @@ type AckResponse struct {
 	Status string `json:"status"`
 }
 
-func (c *Client) Ack(input groove.AckInput) (*AckResponse, error) {
+func (c *Client) Ack(input AckInput) (*AckResponse, error) {
 	jsb, err := json.Marshal(input)
 	if err != nil {
 		return nil, err
@@ -151,7 +149,7 @@ func (c *Client) Ack(input groove.AckInput) (*AckResponse, error) {
 	return &response, nil
 }
 
-func (c *Client) Nack(input groove.AckInput) (*AckResponse, error) {
+func (c *Client) Nack(input AckInput) (*AckResponse, error) {
 	jsb, err := json.Marshal(input)
 	if err != nil {
 		return nil, err
