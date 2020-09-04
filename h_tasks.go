@@ -66,11 +66,20 @@ func hAck(c *gin.Context) {
 		return
 	}
 
-	err = grooveMaster.Ack(input.TaskSetID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	if input.TaskID != nil {
+		err = grooveMaster.AckTask(input.TaskSetID, *input.TaskID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	} else {
+		err = grooveMaster.Ack(input.TaskSetID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 	}
+
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }

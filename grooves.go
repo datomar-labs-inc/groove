@@ -160,6 +160,57 @@ func (g *GrooveMaster) NackTask(taskSetID string, failedTaskID string) error {
 	return nil
 }
 
+// AckTask is used to note that a single task in a task set has been completed
+func (g *GrooveMaster) AckTask(taskSetID string, succeededTaskID string) error {
+	g.mx.Lock()
+	defer g.mx.Unlock()
+
+	// Load the task set log
+	ts, ok := g.TaskSetLogs[taskSetID]
+	if ok {
+		acked := false
+
+		// Update task containers for each task
+		for i, taskID := range ts.TaskIDs {
+			if taskID == succeededTaskID {
+				idParts := strings.Split(taskID, ".")
+
+				// Find the TaskContainer that contains the current task
+				cc, _ := g.RootContainer.GetChildContainer(strings.Join(idParts[:len(idParts)-1], "."))
+				if cc != nil {
+					if cc.Locked && cc.LockedTask.ID == taskID {
+						// Add task back to front of list
+						cc.LockedTask = nil
+						cc.Locked = false
+
+						// Remove task from TaskSet
+						ts.TaskIDs = append(ts.TaskIDs[:i], ts.TaskIDs[i+1:]...)
+					} else {
+						return errors.New("task set was not locked")
+					}
+				}
+
+				acked = true
+
+				break
+			}
+		}
+
+		if !acked {
+			return errors.New("task did not exist")
+		}
+
+		// Remove the task set if there are no more tasks
+		if len(ts.TaskIDs) == 0 {
+			delete(g.TaskSetLogs, taskSetID)
+		}
+	} else {
+		return errors.New("task set did not exist")
+	}
+
+	return nil
+}
+
 func (g *GrooveMaster) Dequeue(desiredTasks int, prefix string) *groove.TaskSet {
 	g.mx.Lock()
 	defer g.mx.Unlock()
