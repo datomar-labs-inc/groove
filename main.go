@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 
 	"github.com/gin-gonic/gin"
@@ -18,6 +19,17 @@ func main() {
 	r.POST("/enqueue", hEnqueue)
 	r.POST("/ack", hAck)
 	r.POST("/nack", hNack)
+
+	r.GET("/status", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": grooveMaster.RootContainer.String()})
+	})
+
+	r.GET("/data", func(c *gin.Context) {
+		grooveMaster.mx.Lock()
+		defer grooveMaster.mx.Unlock()
+
+		c.JSON(http.StatusOK, grooveMaster.RootContainer)
+	})
 
 	port := "9854"
 

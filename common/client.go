@@ -2,6 +2,7 @@ package groove
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,13 +30,13 @@ type EnqueueResponse struct {
 	Status   string `json:"status"`
 }
 
-func (c *Client) Enqueue(tasks []Task) (*EnqueueResponse, error) {
+func (c *Client) Enqueue(ctx context.Context, tasks []Task) (*EnqueueResponse, error) {
 	jsb, err := json.Marshal(EnqueueTaskInput{Tasks: tasks})
 	if err != nil {
 		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/enqueue", c.baseURL), bytes.NewReader(jsb))
+	req, err := http.NewRequestWithContext(ctx,"POST", fmt.Sprintf("%s/enqueue", c.baseURL), bytes.NewReader(jsb))
 	if err != nil {
 		return nil, err
 	}
@@ -71,13 +72,13 @@ type DequeueResponse struct {
 	TaskSet TaskSet `json:"task_set"`
 }
 
-func (c *Client) Dequeue(input DequeueTaskInput) (*DequeueResponse, error) {
+func (c *Client) Dequeue(ctx context.Context, input DequeueTaskInput) (*DequeueResponse, error) {
 	jsb, err := json.Marshal(input)
 	if err != nil {
 		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/dequeue", c.baseURL), bytes.NewReader(jsb))
+	req, err := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("%s/dequeue", c.baseURL), bytes.NewReader(jsb))
 	if err != nil {
 		return nil, err
 	}
@@ -112,13 +113,13 @@ type AckResponse struct {
 	Status string `json:"status"`
 }
 
-func (c *Client) Ack(input AckInput) (*AckResponse, error) {
+func (c *Client) Ack(ctx context.Context, input AckInput) (*AckResponse, error) {
 	jsb, err := json.Marshal(input)
 	if err != nil {
 		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/ack", c.baseURL), bytes.NewReader(jsb))
+	req, err := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("%s/ack", c.baseURL), bytes.NewReader(jsb))
 	if err != nil {
 		return nil, err
 	}
@@ -149,13 +150,13 @@ func (c *Client) Ack(input AckInput) (*AckResponse, error) {
 	return &response, nil
 }
 
-func (c *Client) Nack(input AckInput) (*AckResponse, error) {
+func (c *Client) Nack(ctx context.Context, input AckInput) (*AckResponse, error) {
 	jsb, err := json.Marshal(input)
 	if err != nil {
 		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/nack", c.baseURL), bytes.NewReader(jsb))
+	req, err := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("%s/nack", c.baseURL), bytes.NewReader(jsb))
 	if err != nil {
 		return nil, err
 	}
