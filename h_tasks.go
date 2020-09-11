@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -24,11 +25,20 @@ func hEnqueue(c *gin.Context) {
 
 	wait := c.Query("wait") == "true"
 
+	var fails int
+	var successes int
+
 	if wait {
 		waits := grooveMaster.EnqueueAndWait(input.Tasks)
 
 		for _, w := range waits {
-			<-w
+			succeeded := <-w
+
+			if succeeded {
+				successes++
+			} else {
+				fails++
+			}
 		}
 	} else {
 		grooveMaster.Enqueue(input.Tasks)
@@ -37,7 +47,8 @@ func hEnqueue(c *gin.Context) {
 	resp := gin.H{"status": "ok"}
 
 	if wait {
-		resp["processed"] = len(input.Tasks)
+		resp["processed"] = successes
+		resp["failed"] = fails
 	} else {
 		resp["enqueued"] = len(input.Tasks)
 	}
@@ -59,7 +70,7 @@ func hDequeue(c *gin.Context) {
 		return
 	}
 
-	taskSet := grooveMaster.Dequeue(input.DesiredTaskCount, input.Prefix)
+	taskSet := grooveMaster.Dequeue(input.DesiredTaskCount, input.Prefix, time.Duration(input.Timeout)*time.Millisecond)
 
 	// A task set could not be formed due to not enough tasks
 	if taskSet == nil {

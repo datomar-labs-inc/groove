@@ -5,14 +5,18 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
 	groove "github.com/datomar-labs-inc/groove/common"
 )
 
+const RETRY_THRESHOLD = 1
+
 type GrooveMaster struct {
-	mx sync.Mutex
+	mx      sync.Mutex
+	running bool
 
 	RootContainer *TaskContainer
 	TaskSetLogs   map[string]groove.TaskSetLog
@@ -20,7 +24,8 @@ type GrooveMaster struct {
 }
 
 func New() *GrooveMaster {
-	return &GrooveMaster{
+	gm := &GrooveMaster{
+		running:     true,
 		TaskSetLogs: map[string]groove.TaskSetLog{},
 		RootContainer: &TaskContainer{
 			Children: map[string]*TaskContainer{},
@@ -28,6 +33,22 @@ func New() *GrooveMaster {
 		},
 		Waits: map[string][]chan bool{},
 	}
+
+	go func() {
+		for gm.running {
+			for _, ts := range gm.TaskSetLogs {
+
+				// Check if this task set has timed out
+				if time.Now().After(ts.TimeoutAt) {
+					_ = gm.Nack(ts.ID)
+				}
+			}
+
+			time.Sleep(100 * time.Millisecond)
+		}
+	}()
+
+	return gm
 }
 
 func (g *GrooveMaster) Print() {
@@ -116,12 +137,37 @@ func (g *GrooveMaster) Nack(taskSetID string) error {
 			idParts := strings.Split(taskID, ".")
 
 			// Find the TaskContainer that contains the current task
-			cc, _ := g.RootContainer.GetChildContainer(strings.Join(idParts[:len(idParts)-1], "."))
+			cc, key := g.RootContainer.GetChildContainer(strings.Join(idParts[:len(idParts)-1], "."))
 			if cc != nil {
 				if cc.Locked && cc.LockedTask.ID == taskID {
-					cc.Tasks = append([]groove.Task{*cc.LockedTask}, cc.Tasks...)
-					cc.LockedTask = nil
-					cc.Locked = false
+					cc.LockedTask.RetryCount++
+
+					// Kill the task
+					if cc.LockedTask.RetryCount > RETRY_THRESHOLD {
+
+						// Check for waits and complete them
+						if waits, ok := g.Waits[taskID]; ok {
+							for _, w := range waits {
+								w <- false
+							}
+
+							delete(g.Waits, taskID)
+						}
+
+						cc.LockedTask = nil
+						cc.Locked = false
+
+						// remove the TaskContainer from the tree if it has no more tasks
+						if len(cc.Tasks) == 0 {
+							delete(cc.Parent.Children, key)
+						}
+
+					} else {
+						// Place the task back on the queue
+						cc.Tasks = append([]groove.Task{*cc.LockedTask}, cc.Tasks...)
+						cc.LockedTask = nil
+						cc.Locked = false
+					}
 				} else {
 					return errors.New("task set was not locked")
 				}
@@ -154,16 +200,43 @@ func (g *GrooveMaster) NackTask(taskSetID string, failedTaskID string) error {
 				idParts := strings.Split(taskID, ".")
 
 				// Find the TaskContainer that contains the current task
-				cc, _ := g.RootContainer.GetChildContainer(strings.Join(idParts[:len(idParts)-1], "."))
+				cc, key := g.RootContainer.GetChildContainer(strings.Join(idParts[:len(idParts)-1], "."))
 				if cc != nil {
 					if cc.Locked && cc.LockedTask.ID == taskID {
-						// Add task back to front of list
-						cc.Tasks = append([]groove.Task{*cc.LockedTask}, cc.Tasks...)
-						cc.LockedTask = nil
-						cc.Locked = false
+						cc.LockedTask.RetryCount++
+
+						// Kill the task
+						if cc.LockedTask.RetryCount > RETRY_THRESHOLD {
+
+							// Check for waits and complete them
+							if waits, ok := g.Waits[taskID]; ok {
+								for _, w := range waits {
+									w <- false
+								}
+
+								delete(g.Waits, taskID)
+							}
+
+							cc.LockedTask = nil
+							cc.Locked = false
+
+							// remove the TaskContainer from the tree if it has no more tasks
+							if len(cc.Tasks) == 0 {
+								delete(cc.Parent.Children, key)
+							}
+
+						} else {
+							// Add task back to front of list
+							cc.LockedTask.RetryCount++
+							cc.Tasks = append([]groove.Task{*cc.LockedTask}, cc.Tasks...)
+							cc.LockedTask = nil
+							cc.Locked = false
+
+						}
 
 						// Remove task from TaskSet
 						ts.TaskIDs = append(ts.TaskIDs[:i], ts.TaskIDs[i+1:]...)
+
 					} else {
 						return errors.New("task set was not locked")
 					}
@@ -245,7 +318,7 @@ func (g *GrooveMaster) AckTask(taskSetID string, succeededTaskID string) error {
 	return nil
 }
 
-func (g *GrooveMaster) Dequeue(desiredTasks int, prefix string) *groove.TaskSet {
+func (g *GrooveMaster) Dequeue(desiredTasks int, prefix string, timeout time.Duration) *groove.TaskSet {
 	g.mx.Lock()
 	defer g.mx.Unlock()
 
@@ -292,8 +365,9 @@ func (g *GrooveMaster) Dequeue(desiredTasks int, prefix string) *groove.TaskSet 
 	}
 
 	tsl := groove.TaskSetLog{
-		ID:      id,
-		TaskIDs: taskIDs,
+		ID:        id,
+		TaskIDs:   taskIDs,
+		TimeoutAt: time.Now().Add(timeout),
 	}
 
 	g.TaskSetLogs[id] = tsl
@@ -344,7 +418,8 @@ type TaskContainer struct {
 	Locked     bool         `json:"locked"`
 	LockedTask *groove.Task `json:"locked_task"` // The task which is currently being processed
 
-	Parent *TaskContainer `json:"-"`
+	CurrentTaskTimeout *time.Time     `json:"-"`
+	Parent             *TaskContainer `json:"-"`
 
 	Children map[string]*TaskContainer `json:"children"`
 	Tasks    []groove.Task             `json:"tasks"`
