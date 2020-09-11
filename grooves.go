@@ -36,12 +36,20 @@ func New() *GrooveMaster {
 
 	go func() {
 		for gm.running {
+			var timeouts []string
+
+			gm.mx.Lock()
 			for _, ts := range gm.TaskSetLogs {
 
 				// Check if this task set has timed out
 				if time.Now().After(ts.TimeoutAt) {
-					_ = gm.Nack(ts.ID)
+					timeouts = append(timeouts, ts.ID)
 				}
+			}
+			gm.mx.Unlock()
+
+			for _, to := range timeouts {
+				_ = gm.Nack(to)
 			}
 
 			time.Sleep(100 * time.Millisecond)
