@@ -22,9 +22,27 @@ func hEnqueue(c *gin.Context) {
 		return
 	}
 
-	grooveMaster.Enqueue(input.Tasks)
+	wait := c.Query("wait") == "true"
 
-	c.JSON(http.StatusOK, gin.H{"enqueued": len(input.Tasks), "status": "ok"})
+	if wait {
+		waits := grooveMaster.EnqueueAndWait(input.Tasks)
+
+		for _, w := range waits {
+			<-w
+		}
+	} else {
+		grooveMaster.Enqueue(input.Tasks)
+	}
+
+	resp := gin.H{"status": "ok"}
+
+	if wait {
+		resp["processed"] = len(input.Tasks)
+	} else {
+		resp["enqueued"] = len(input.Tasks)
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
 func hDequeue(c *gin.Context) {
@@ -79,7 +97,6 @@ func hAck(c *gin.Context) {
 			return
 		}
 	}
-
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }

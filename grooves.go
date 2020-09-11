@@ -16,6 +16,7 @@ type GrooveMaster struct {
 
 	RootContainer *TaskContainer
 	TaskSetLogs   map[string]groove.TaskSetLog
+	Waits         map[string][]chan bool
 }
 
 func New() *GrooveMaster {
@@ -25,6 +26,7 @@ func New() *GrooveMaster {
 			Children: map[string]*TaskContainer{},
 			Tasks:    nil,
 		},
+		Waits: map[string][]chan bool{},
 	}
 }
 
@@ -39,6 +41,20 @@ func (g *GrooveMaster) Enqueue(tasks []groove.Task) {
 	for _, t := range tasks {
 		g.putTask(t)
 	}
+}
+
+func (g *GrooveMaster) EnqueueAndWait(tasks []groove.Task) []chan bool {
+	g.mx.Lock()
+	defer g.mx.Unlock()
+
+	var waits []chan bool
+
+	for _, t := range tasks {
+		g.putTask(t)
+		waits = append(waits, g.putWait(t.ID))
+	}
+
+	return waits
 }
 
 // Ack is used to acknowledge that all work in a TaskSet has been completed
@@ -58,6 +74,15 @@ func (g *GrooveMaster) Ack(taskSetID string) error {
 			cc, key := g.RootContainer.GetChildContainer(strings.Join(idParts[:len(idParts)-1], "."))
 			if cc != nil {
 				if cc.Locked && cc.LockedTask.ID == taskID {
+					// Check for waits and complete them
+					if waits, ok := g.Waits[taskID]; ok {
+						for _, w := range waits {
+							w <- true
+						}
+
+						delete(g.Waits, taskID)
+					}
+
 					cc.LockedTask = nil
 					cc.Locked = false
 
@@ -179,6 +204,15 @@ func (g *GrooveMaster) AckTask(taskSetID string, succeededTaskID string) error {
 				cc, _ := g.RootContainer.GetChildContainer(strings.Join(idParts[:len(idParts)-1], "."))
 				if cc != nil {
 					if cc.Locked && cc.LockedTask.ID == taskID {
+						// Check for waits and complete them
+						if waits, ok := g.Waits[taskID]; ok {
+							for _, w := range waits {
+								w <- true
+							}
+
+							delete(g.Waits, taskID)
+						}
+
 						// Add task back to front of list
 						cc.LockedTask = nil
 						cc.Locked = false
@@ -299,14 +333,21 @@ func (g *GrooveMaster) putTask(task groove.Task) {
 	}
 }
 
+// putWait is not safe to be called on it's own. The caller must ensure thread safety
+func (g *GrooveMaster) putWait(taskID string) chan bool {
+	ch := make(chan bool, 1)
+	g.Waits[taskID] = append(g.Waits[taskID], ch)
+	return ch
+}
+
 type TaskContainer struct {
-	Locked     bool  `json:"locked"`
+	Locked     bool         `json:"locked"`
 	LockedTask *groove.Task `json:"locked_task"` // The task which is currently being processed
 
 	Parent *TaskContainer `json:"-"`
 
 	Children map[string]*TaskContainer `json:"children"`
-	Tasks    []groove.Task                    `json:"tasks"`
+	Tasks    []groove.Task             `json:"tasks"`
 }
 
 func (t *TaskContainer) String() string {

@@ -30,13 +30,19 @@ type EnqueueResponse struct {
 	Status   string `json:"status"`
 }
 
-func (c *Client) Enqueue(ctx context.Context, tasks []Task) (*EnqueueResponse, error) {
+func (c *Client) Enqueue(ctx context.Context, tasks []Task, wait bool) (*EnqueueResponse, error) {
 	jsb, err := json.Marshal(EnqueueTaskInput{Tasks: tasks})
 	if err != nil {
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx,"POST", fmt.Sprintf("%s/enqueue", c.baseURL), bytes.NewReader(jsb))
+	waitTxt := ""
+
+	if wait {
+		waitTxt = "?wait=true"
+	}
+
+	req, err := http.NewRequestWithContext(ctx,"POST", fmt.Sprintf("%s/enqueue%s", c.baseURL, waitTxt), bytes.NewReader(jsb))
 	if err != nil {
 		return nil, err
 	}

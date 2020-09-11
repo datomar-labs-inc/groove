@@ -6,6 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	groove "github.com/datomar-labs-inc/groove/common"
 )
@@ -72,6 +73,79 @@ func TestGrooveMaster_Enqueue(t *testing.T) {
 
 	fmt.Println("Processed", proccessed)
 }
+
+func TestGrooveMaster_EnqueueAndWait(t *testing.T) {
+	g := New()
+
+	eqwg := sync.WaitGroup{}
+
+	for i := 0; i < 1000; i++ {
+		eqwg.Add(1)
+
+		go func(idx int) {
+			var tasks []groove.Task
+
+			for j := 0; j < 20; j++ {
+
+				for k := 0; k < 5; k++ {
+					tasks = append(tasks, groove.Task{
+						ID:   fmt.Sprintf("memory.%d.%d.%d", idx, j, k),
+						Data: nil,
+					})
+				}
+			}
+
+			waits := g.EnqueueAndWait(tasks)
+
+			eqwg.Done()
+
+			start := time.Now()
+
+			for _, w := range waits {
+				<- w
+			}
+
+			duration := time.Now().Sub(start)
+
+			fmt.Printf("%d - Wait took %dms\n", idx, duration.Milliseconds())
+		}(i)
+	}
+
+	eqwg.Wait()
+
+	wg := sync.WaitGroup{}
+
+	var proccessed uint32
+
+	for i := 0; i < 80; i++ {
+		wg.Add(1)
+
+		go func(consumerNum int) {
+			defer wg.Done()
+
+			for {
+				dq := g.Dequeue(10, "memory")
+
+				if dq != nil {
+					atomic.AddUint32(&proccessed, uint32(len(dq.Tasks)))
+
+					err := g.Ack(dq.ID)
+					if err != nil {
+						fmt.Println("Consumer", consumerNum, "ERROR:", err.Error())
+					}
+				} else {
+					fmt.Println("Consumer", consumerNum, "done")
+					break
+				}
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	fmt.Println("Processed", proccessed)
+}
+
 
 func TestGrooveMaster_PutTask(t *testing.T) {
 	g := New()
