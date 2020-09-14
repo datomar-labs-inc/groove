@@ -26,8 +26,10 @@ func New(baseURL string) *Client {
 }
 
 type EnqueueResponse struct {
-	Enqueued int    `json:"enqueued"`
-	Status   string `json:"status"`
+	Enqueued  *int   `json:"enqueued,omitempty"`
+	Processed *int   `json:"processed,omitempty"`
+	Failed    *int   `json:"failed,omitempty"`
+	Status    string `json:"status"`
 }
 
 func (c *Client) Enqueue(ctx context.Context, tasks []Task, wait bool) (*EnqueueResponse, error) {
@@ -42,7 +44,7 @@ func (c *Client) Enqueue(ctx context.Context, tasks []Task, wait bool) (*Enqueue
 		waitTxt = "?wait=true"
 	}
 
-	req, err := http.NewRequestWithContext(ctx,"POST", fmt.Sprintf("%s/enqueue%s", c.baseURL, waitTxt), bytes.NewReader(jsb))
+	req, err := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("%s/enqueue%s", c.baseURL, waitTxt), bytes.NewReader(jsb))
 	if err != nil {
 		return nil, err
 	}
@@ -192,5 +194,3 @@ func (c *Client) Nack(ctx context.Context, input AckInput) (*AckResponse, error)
 
 	return &response, nil
 }
-
-

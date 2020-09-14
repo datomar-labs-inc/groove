@@ -49,8 +49,15 @@ func hEnqueue(c *gin.Context) {
 	if wait {
 		resp["processed"] = successes
 		resp["failed"] = fails
+
+		if fails > 0 {
+			resp["status"] = "has_failures"
+		} else {
+			resp["status"] = "processed"
+		}
 	} else {
 		resp["enqueued"] = len(input.Tasks)
+		resp["status"] = "processed"
 	}
 
 	c.JSON(http.StatusOK, resp)
