@@ -41,6 +41,8 @@ func hEnqueue(c *gin.Context) {
 			} else {
 				fails++
 			}
+
+			tasks = append(tasks, task)
 		}
 	} else {
 		grooveMaster.Enqueue(input.Tasks)

@@ -12,8 +12,6 @@ import (
 	groove "github.com/datomar-labs-inc/groove/common"
 )
 
-const RETRY_THRESHOLD = 1
-
 type GrooveMaster struct {
 	mx      sync.Mutex
 	running bool
@@ -153,13 +151,12 @@ func (g *GrooveMaster) Nack(taskSetID string, errorData interface{}) error {
 			if cc != nil {
 				if cc.Locked && cc.LockedTask.ID == taskID {
 					cc.LockedTask.RetryCount++
-
-					if errorData != nil {
-						cc.LockedTask.Errors = append(cc.LockedTask.Errors, errorData)
-					}
+					cc.LockedTask.Errors = append(cc.LockedTask.Errors, errorData)
 
 					// Kill the task
-					if cc.LockedTask.RetryCount > RETRY_THRESHOLD {
+					if cc.LockedTask.RetryCount > cc.LockedTask.RetryThreshold {
+
+						cc.LockedTask.Succeeded = false
 
 						// Check for waits and complete them
 						if waits, ok := g.Waits[taskID]; ok {
@@ -226,7 +223,8 @@ func (g *GrooveMaster) NackTask(taskSetID string, failedTaskID string, errorData
 						}
 
 						// Kill the task
-						if cc.LockedTask.RetryCount > RETRY_THRESHOLD {
+						if cc.LockedTask.RetryCount > cc.LockedTask.RetryThreshold {
+							cc.LockedTask.Succeeded = false
 
 							// Check for waits and complete them
 							if waits, ok := g.Waits[taskID]; ok {

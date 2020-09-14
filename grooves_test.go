@@ -52,7 +52,7 @@ func TestGrooveMaster_Enqueue(t *testing.T) {
 			defer wg.Done()
 
 			for {
-				dq := g.Dequeue(10, "memory", 10 * time.Second)
+				dq := g.Dequeue(10, "memory", 10*time.Second)
 
 				if dq != nil {
 					atomic.AddUint32(&proccessed, uint32(len(dq.Tasks)))
@@ -102,7 +102,7 @@ func TestGrooveMaster_EnqueueAndWait(t *testing.T) {
 			start := time.Now()
 
 			for _, w := range waits {
-				<- w
+				<-w
 			}
 
 			duration := time.Now().Sub(start)
@@ -124,7 +124,7 @@ func TestGrooveMaster_EnqueueAndWait(t *testing.T) {
 			defer wg.Done()
 
 			for {
-				dq := g.Dequeue(10, "memory", 10 * time.Second)
+				dq := g.Dequeue(10, "memory", 10*time.Second)
 
 				if dq != nil {
 					atomic.AddUint32(&proccessed, uint32(len(dq.Tasks)))
@@ -163,15 +163,16 @@ func TestGrooveMaster_Dequeue(t *testing.T) {
 
 	waits := g.EnqueueAndWait([]groove.Task{
 		{
-			ID:         "test.task",
-			Data:       nil,
+			ID:             "test.task",
+			Data:           nil,
+			RetryThreshold: 1,
 		},
 	})
 
-	res := <- waits[0]
+	res := <-waits[0]
 
 	if res.Succeeded == true {
-		t.Error("expected wait 0 to succeed")
+		t.Error("expected wait 0 to fail")
 		return
 	}
 
@@ -410,7 +411,7 @@ func BenchmarkDequeue10(b *testing.B) {
 
 	for n := 0; n < b.N; n++ {
 		g.Enqueue(tasks)
-		r = g.Dequeue(10, "", 10 * time.Second)
+		r = g.Dequeue(10, "", 10*time.Second)
 	}
 }
 
@@ -432,7 +433,7 @@ func BenchmarkDequeue250(b *testing.B) {
 
 	for n := 0; n < b.N; n++ {
 		g.Enqueue(tasks)
-		r = g.Dequeue(250, "", 10 * time.Second)
+		r = g.Dequeue(250, "", 10*time.Second)
 	}
 }
 
@@ -454,7 +455,7 @@ func BenchmarkDequeue250Deep(b *testing.B) {
 
 	for n := 0; n < b.N; n++ {
 		g.Enqueue(tasks)
-		r = g.Dequeue(250, "", 10 * time.Second)
+		r = g.Dequeue(250, "", 10*time.Second)
 	}
 }
 
@@ -476,7 +477,7 @@ func BenchmarkDequeue250DeepAck(b *testing.B) {
 
 	for n := 0; n < b.N; n++ {
 		g.Enqueue(tasks)
-		r = g.Dequeue(250, "", 10 * time.Second)
+		r = g.Dequeue(250, "", 10*time.Second)
 		_ = g.Ack(r.ID, nil)
 	}
 }
@@ -502,11 +503,11 @@ func BenchmarkDequeue250Parallel(b *testing.B) {
 
 		wg := sync.WaitGroup{}
 
-		for i := 0; i < 10; i ++ {
+		for i := 0; i < 10; i++ {
 			wg.Add(1)
 
 			go func() {
-				r = g.Dequeue(25, "", 10 * time.Second)
+				r = g.Dequeue(25, "", 10*time.Second)
 				wg.Done()
 			}()
 		}
@@ -536,11 +537,11 @@ func BenchmarkDequeue250ParallelAck(b *testing.B) {
 
 		wg := sync.WaitGroup{}
 
-		for i := 0; i < 10; i ++ {
+		for i := 0; i < 10; i++ {
 			wg.Add(1)
 
 			go func() {
-				r = g.Dequeue(25, "", 10 * time.Second)
+				r = g.Dequeue(25, "", 10*time.Second)
 
 				if r != nil {
 					_ = g.Ack(r.ID, nil)
@@ -574,11 +575,11 @@ func BenchmarkDequeue250ParallelDeep(b *testing.B) {
 
 		wg := sync.WaitGroup{}
 
-		for i := 0; i < 10; i ++ {
+		for i := 0; i < 10; i++ {
 			wg.Add(1)
 
 			go func() {
-				r = g.Dequeue(25, "", 10 * time.Second)
+				r = g.Dequeue(25, "", 10*time.Second)
 				wg.Done()
 			}()
 		}
@@ -608,11 +609,11 @@ func BenchmarkDequeue250ParallelDeepAck(b *testing.B) {
 
 		wg := sync.WaitGroup{}
 
-		for i := 0; i < 10; i ++ {
+		for i := 0; i < 10; i++ {
 			wg.Add(1)
 
 			go func() {
-				r = g.Dequeue(25, "", 10 * time.Second)
+				r = g.Dequeue(25, "", 10*time.Second)
 				_ = g.Ack(r.ID, nil)
 				wg.Done()
 			}()
@@ -640,6 +641,6 @@ func BenchmarkDequeue1000(b *testing.B) {
 
 	for n := 0; n < b.N; n++ {
 		g.Enqueue(tasks)
-		r = g.Dequeue(1000, "", 10 * time.Second)
+		r = g.Dequeue(1000, "", 10*time.Second)
 	}
 }
