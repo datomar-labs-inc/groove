@@ -30,6 +30,7 @@ type EnqueueResponse struct {
 	Processed *int   `json:"processed,omitempty"`
 	Failed    *int   `json:"failed,omitempty"`
 	Status    string `json:"status"`
+	Tasks     []Task `json:"tasks,omitempty"`
 }
 
 func (c *Client) Enqueue(ctx context.Context, tasks []Task, wait bool) (*EnqueueResponse, error) {

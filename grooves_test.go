@@ -57,7 +57,7 @@ func TestGrooveMaster_Enqueue(t *testing.T) {
 				if dq != nil {
 					atomic.AddUint32(&proccessed, uint32(len(dq.Tasks)))
 
-					err := g.Ack(dq.ID)
+					err := g.Ack(dq.ID, nil)
 					if err != nil {
 						fmt.Println("Consumer", consumerNum, "ERROR:", err.Error())
 					}
@@ -129,7 +129,7 @@ func TestGrooveMaster_EnqueueAndWait(t *testing.T) {
 				if dq != nil {
 					atomic.AddUint32(&proccessed, uint32(len(dq.Tasks)))
 
-					err := g.Ack(dq.ID)
+					err := g.Ack(dq.ID, nil)
 					if err != nil {
 						fmt.Println("Consumer", consumerNum, "ERROR:", err.Error())
 					}
@@ -170,8 +170,8 @@ func TestGrooveMaster_Dequeue(t *testing.T) {
 
 	res := <- waits[0]
 
-	if res != false {
-		t.Error("expected wait 0 to be false")
+	if res.Succeeded == true {
+		t.Error("expected wait 0 to succeed")
 		return
 	}
 
@@ -477,7 +477,7 @@ func BenchmarkDequeue250DeepAck(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		g.Enqueue(tasks)
 		r = g.Dequeue(250, "", 10 * time.Second)
-		_ = g.Ack(r.ID)
+		_ = g.Ack(r.ID, nil)
 	}
 }
 
@@ -543,7 +543,7 @@ func BenchmarkDequeue250ParallelAck(b *testing.B) {
 				r = g.Dequeue(25, "", 10 * time.Second)
 
 				if r != nil {
-					_ = g.Ack(r.ID)
+					_ = g.Ack(r.ID, nil)
 				}
 				wg.Done()
 			}()
@@ -613,7 +613,7 @@ func BenchmarkDequeue250ParallelDeepAck(b *testing.B) {
 
 			go func() {
 				r = g.Dequeue(25, "", 10 * time.Second)
-				_ = g.Ack(r.ID)
+				_ = g.Ack(r.ID, nil)
 				wg.Done()
 			}()
 		}

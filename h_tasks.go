@@ -28,13 +28,15 @@ func hEnqueue(c *gin.Context) {
 	var fails int
 	var successes int
 
+	var tasks []groove.Task
+
 	if wait {
 		waits := grooveMaster.EnqueueAndWait(input.Tasks)
 
 		for _, w := range waits {
-			succeeded := <-w
+			task := <-w
 
-			if succeeded {
+			if task.Succeeded {
 				successes++
 			} else {
 				fails++
@@ -49,6 +51,7 @@ func hEnqueue(c *gin.Context) {
 	if wait {
 		resp["processed"] = successes
 		resp["failed"] = fails
+		resp["tasks"] = tasks
 
 		if fails > 0 {
 			resp["status"] = "has_failures"
@@ -103,13 +106,13 @@ func hAck(c *gin.Context) {
 	}
 
 	if input.TaskID != nil {
-		err = grooveMaster.AckTask(input.TaskSetID, *input.TaskID)
+		err = grooveMaster.AckTask(input.TaskSetID, *input.TaskID, input.Result)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 	} else {
-		err = grooveMaster.Ack(input.TaskSetID)
+		err = grooveMaster.Ack(input.TaskSetID, input.Result)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -129,13 +132,13 @@ func hNack(c *gin.Context) {
 	}
 
 	if input.TaskID != nil {
-		err = grooveMaster.NackTask(input.TaskSetID, *input.TaskID)
+		err = grooveMaster.NackTask(input.TaskSetID, *input.TaskID, input.Error)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 	} else {
-		err = grooveMaster.Nack(input.TaskSetID)
+		err = grooveMaster.Nack(input.TaskSetID, input.Error)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return

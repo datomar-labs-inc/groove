@@ -20,7 +20,7 @@ type GrooveMaster struct {
 
 	RootContainer *TaskContainer
 	TaskSetLogs   map[string]groove.TaskSetLog
-	Waits         map[string][]chan bool
+	Waits         map[string][]chan groove.Task
 }
 
 func New() *GrooveMaster {
@@ -31,7 +31,7 @@ func New() *GrooveMaster {
 			Children: map[string]*TaskContainer{},
 			Tasks:    nil,
 		},
-		Waits: map[string][]chan bool{},
+		Waits: map[string][]chan groove.Task{},
 	}
 
 	go func() {
@@ -49,7 +49,9 @@ func New() *GrooveMaster {
 			gm.mx.Unlock()
 
 			for _, to := range timeouts {
-				_ = gm.Nack(to)
+				_ = gm.Nack(to, map[string]string{
+					"error": "task failed due to exceeding timeout",
+				})
 			}
 
 			time.Sleep(100 * time.Millisecond)
@@ -72,11 +74,11 @@ func (g *GrooveMaster) Enqueue(tasks []groove.Task) {
 	}
 }
 
-func (g *GrooveMaster) EnqueueAndWait(tasks []groove.Task) []chan bool {
+func (g *GrooveMaster) EnqueueAndWait(tasks []groove.Task) []chan groove.Task {
 	g.mx.Lock()
 	defer g.mx.Unlock()
 
-	var waits []chan bool
+	var waits []chan groove.Task
 
 	for _, t := range tasks {
 		g.putTask(t)
@@ -87,7 +89,7 @@ func (g *GrooveMaster) EnqueueAndWait(tasks []groove.Task) []chan bool {
 }
 
 // Ack is used to acknowledge that all work in a TaskSet has been completed
-func (g *GrooveMaster) Ack(taskSetID string) error {
+func (g *GrooveMaster) Ack(taskSetID string, result interface{}) error {
 	g.mx.Lock()
 	defer g.mx.Unlock()
 
@@ -103,10 +105,12 @@ func (g *GrooveMaster) Ack(taskSetID string) error {
 			cc, key := g.RootContainer.GetChildContainer(strings.Join(idParts[:len(idParts)-1], "."))
 			if cc != nil {
 				if cc.Locked && cc.LockedTask.ID == taskID {
+					cc.LockedTask.Result = result
+
 					// Check for waits and complete them
 					if waits, ok := g.Waits[taskID]; ok {
 						for _, w := range waits {
-							w <- true
+							w <- *cc.LockedTask
 						}
 
 						delete(g.Waits, taskID)
@@ -132,7 +136,7 @@ func (g *GrooveMaster) Ack(taskSetID string) error {
 }
 
 // Nack is used to acknowledge that all work in a TaskSet has failed
-func (g *GrooveMaster) Nack(taskSetID string) error {
+func (g *GrooveMaster) Nack(taskSetID string, errorData interface{}) error {
 	g.mx.Lock()
 	defer g.mx.Unlock()
 
@@ -150,13 +154,17 @@ func (g *GrooveMaster) Nack(taskSetID string) error {
 				if cc.Locked && cc.LockedTask.ID == taskID {
 					cc.LockedTask.RetryCount++
 
+					if errorData != nil {
+						cc.LockedTask.Errors = append(cc.LockedTask.Errors, errorData)
+					}
+
 					// Kill the task
 					if cc.LockedTask.RetryCount > RETRY_THRESHOLD {
 
 						// Check for waits and complete them
 						if waits, ok := g.Waits[taskID]; ok {
 							for _, w := range waits {
-								w <- false
+								w <- *cc.LockedTask
 							}
 
 							delete(g.Waits, taskID)
@@ -192,7 +200,7 @@ func (g *GrooveMaster) Nack(taskSetID string) error {
 }
 
 // NackTask is used to note that a single task in a task set has failed
-func (g *GrooveMaster) NackTask(taskSetID string, failedTaskID string) error {
+func (g *GrooveMaster) NackTask(taskSetID string, failedTaskID string, errorData interface{}) error {
 	g.mx.Lock()
 	defer g.mx.Unlock()
 
@@ -213,13 +221,17 @@ func (g *GrooveMaster) NackTask(taskSetID string, failedTaskID string) error {
 					if cc.Locked && cc.LockedTask.ID == taskID {
 						cc.LockedTask.RetryCount++
 
+						if errorData != nil {
+							cc.LockedTask.Errors = append(cc.LockedTask.Errors, errorData)
+						}
+
 						// Kill the task
 						if cc.LockedTask.RetryCount > RETRY_THRESHOLD {
 
 							// Check for waits and complete them
 							if waits, ok := g.Waits[taskID]; ok {
 								for _, w := range waits {
-									w <- false
+									w <- *cc.LockedTask
 								}
 
 								delete(g.Waits, taskID)
@@ -267,7 +279,7 @@ func (g *GrooveMaster) NackTask(taskSetID string, failedTaskID string) error {
 }
 
 // AckTask is used to note that a single task in a task set has been completed
-func (g *GrooveMaster) AckTask(taskSetID string, succeededTaskID string) error {
+func (g *GrooveMaster) AckTask(taskSetID string, succeededTaskID string, result interface{}) error {
 	g.mx.Lock()
 	defer g.mx.Unlock()
 
@@ -285,10 +297,12 @@ func (g *GrooveMaster) AckTask(taskSetID string, succeededTaskID string) error {
 				cc, _ := g.RootContainer.GetChildContainer(strings.Join(idParts[:len(idParts)-1], "."))
 				if cc != nil {
 					if cc.Locked && cc.LockedTask.ID == taskID {
+						cc.LockedTask.Result = result
+
 						// Check for waits and complete them
 						if waits, ok := g.Waits[taskID]; ok {
 							for _, w := range waits {
-								w <- true
+								w <- *cc.LockedTask
 							}
 
 							delete(g.Waits, taskID)
@@ -416,8 +430,8 @@ func (g *GrooveMaster) putTask(task groove.Task) {
 }
 
 // putWait is not safe to be called on it's own. The caller must ensure thread safety
-func (g *GrooveMaster) putWait(taskID string) chan bool {
-	ch := make(chan bool, 1)
+func (g *GrooveMaster) putWait(taskID string) chan groove.Task {
+	ch := make(chan groove.Task, 1)
 	g.Waits[taskID] = append(g.Waits[taskID], ch)
 	return ch
 }

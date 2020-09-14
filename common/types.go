@@ -9,8 +9,11 @@ type Task struct {
 	ID   string      `json:"id"`
 	Data interface{} `json:"data"`
 
-	RetryThreshold int `json:"retry_threshold"` // How many times the task will be retried before being marked as a failure
-	RetryCount     int `json:"-"`
+	Succeeded      bool          `json:"succeeded"`
+	RetryThreshold int           `json:"retry_threshold"` // How many times the task will be retried before being marked as a failure
+	Errors         []interface{} `json:"errors,omitempty"`
+	Result         interface{}   `json:"result,omitempty"`
+	RetryCount     int           `json:"-"`
 }
 
 // TaskSetLog keeps track of a task set, noting which tasks are included in it
@@ -37,6 +40,8 @@ type DequeueTaskInput struct {
 }
 
 type AckInput struct {
-	TaskSetID string  `json:"task_set_id"`
-	TaskID    *string `json:"task_id,omitempty"`
+	TaskSetID string      `json:"task_set_id"`
+	TaskID    *string     `json:"task_id,omitempty"`
+	Error     interface{} `json:"error,omitempty"`
+	Result    interface{} `json:"result,omitempty"`
 }
