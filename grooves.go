@@ -104,6 +104,7 @@ func (g *GrooveMaster) Ack(taskSetID string, result interface{}) error {
 			if cc != nil {
 				if cc.Locked && cc.LockedTask.ID == taskID {
 					cc.LockedTask.Result = result
+					cc.LockedTask.Succeeded = true
 
 					// Check for waits and complete them
 					if waits, ok := g.Waits[taskID]; ok {
@@ -296,6 +297,7 @@ func (g *GrooveMaster) AckTask(taskSetID string, succeededTaskID string, result 
 				if cc != nil {
 					if cc.Locked && cc.LockedTask.ID == taskID {
 						cc.LockedTask.Result = result
+						cc.LockedTask.Succeeded = true
 
 						// Check for waits and complete them
 						if waits, ok := g.Waits[taskID]; ok {
