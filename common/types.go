@@ -4,6 +4,31 @@ import (
 	"time"
 )
 
+const (
+	MessageTypeSubscription = iota
+	MessageTypeTask
+	MessageTypeError
+	MessageTypeEnqueue
+	MessageTypeMisc
+)
+
+// Message the struct that gets passed back and forth in websocket communications
+type Message struct {
+	Type         int           `json:"type" msgpack:"t"`
+	ID           string        `json:"id" msgpack:"i"`
+	Error        *string       `json:"error,omitempty" msgpack:"e,omitempty"`
+	Task         *Task         `json:"task,omitempty" msgpack:"k,omitempty"`
+	Tasks        []Task        `json:"tasks,omitempty" msgpack:"z,omitempty"`
+	Subscription *Subscription `json:"subscription,omitempty" msgpack:"s,omitempty"`
+	Ack          *AckInput     `json:"ack,omitempty" msgpack:"a,omitempty"`
+	Misc         interface{}   `json:"misc,omitempty" msgpack:"m,omitempty"`
+}
+
+type Subscription struct {
+	PrefixSelector *string `json:"prefix_selector,omitempty" msgpack:"p,omitempty"`
+	Capacity       int     `json:"capacity" msgpack:"c"` // How many concurrent messages this subscription can process
+}
+
 // Task is a single bit of work that can be done
 type Task struct {
 	ID   string      `json:"id"`

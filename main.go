@@ -31,6 +31,10 @@ func main() {
 		c.JSON(http.StatusOK, grooveMaster.RootContainer)
 	})
 
+	r.GET("/ws", func(c *gin.Context) {
+		grooveMaster.handleWS(c.Writer, c.Request)
+	})
+
 	port := "9854"
 
 	if os.Getenv("PORT") != "" {

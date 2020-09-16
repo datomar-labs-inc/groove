@@ -16,6 +16,10 @@ type GrooveMaster struct {
 	mx      sync.Mutex
 	running bool
 
+	wsMX          sync.Mutex
+	connections   []*Connection
+	subscriptions []*Subscription
+
 	RootContainer *TaskContainer
 	TaskSetLogs   map[string]groove.TaskSetLog
 	Waits         map[string][]chan groove.Task
